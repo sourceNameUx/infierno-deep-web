@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EL INFIERNO DE LA DEEP WEB — El Subsuelo Digital</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<script src="vendor/three.min.js"></script>
+<script>if(typeof THREE==='undefined'){document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"><\/script>')}</script>
+<script src="vendor/OrbitControls.js"></script>
+<script>if(typeof THREE!=='undefined'&&!THREE.OrbitControls){document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"><\/script>')}</script>
+<script src="vendor/GLTFLoader.js"></script>
+<script>if(typeof THREE!=='undefined'&&!THREE.GLTFLoader){document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"><\/script>')}</script>
+
+<!-- Postprocesado (bloom). El ORDEN es load-bearing y va en este sentido:
+       EffectComposer.js es quien define THREE.Pass, y ShaderPass/RenderPass/UnrealBloomPass
+       hacen `extends THREE.Pass` EN EL MOMENTO DE CARGAR, no al usarse. Con ShaderPass.js antes
+       que EffectComposer.js la clase revienta al evaluarse y THREE.ShaderPass queda sin definir
+       —sin error visible, porque el listener de app.js todavía no existe—, y el composer se
+       construye roto. CopyShader y LuminosityHighPassShader no heredan de Pass, así que su sitio
+       es indiferente, pero se quedan delante porque EffectComposer los necesita al construirse. -->
+<script src="vendor/shaders/CopyShader.js"></script>
+<script>if(typeof THREE!=='undefined'&&!THREE.CopyShader){document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"><\/script>')}</script>
+<script src="vendor/shaders/LuminosityHighPassShader.js"></script>
+<script>if(typeof THREE!=='undefined'&&!THREE.LuminosityHighPassShader){document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"><\/script>')}</script>
+<script src="vendor/postprocessing/EffectComposer.js"></script>
+<script>if(typeof THREE!=='undefined'&&!THREE.EffectComposer){document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"><\/script>')}</script>
+<script src="vendor/postprocessing/ShaderPass.js"></script>
+<script>if(typeof THREE!=='undefined'&&!THREE.ShaderPass){document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"><\/script>')}</script>
+<script src="vendor/postprocessing/RenderPass.js"></script>
+<script>if(typeof THREE!=='undefined'&&!THREE.RenderPass){document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"><\/script>')}</script>
+<script src="vendor/postprocessing/UnrealBloomPass.js"></script>
+<script>if(typeof THREE!=='undefined'&&!THREE.UnrealBloomPass){document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"><\/script>')}</script>
+</head>
+<body>
+
+<!-- LA ESCENA ES LA PÁGINA -->
+<canvas id="scene3d"></canvas>
+<div id="labels3d"></div>
+<div class="grain"></div>
+<div class="scanlines"></div>
+<div class="vignette"></div>
+
+<!-- BARRA SUPERIOR -->
+<header class="hud-top">
+  <div class="brand">
+    <span class="sigil">◈</span>
+    <div>
+      <b>EL INFIERNO <i>DE LA DEEP WEB</i></b>
+      <small>Santiago Cundumí Solís · Ernive Méndez Ortega · 11-2</small>
+    </div>
+  </div>
+  <div class="hud-top-r">
+    <span class="coords" id="coords">SECTOR 0x00</span>
+    <button id="btnConcept" class="chip">◉ Concepto</button>
+    <button id="btnSinners" class="chip">☰ Pecadores reales</button>
+    <button id="btnAudio" class="chip" title="Música ambiental" aria-label="Música ambiental">🔊</button>
+    <button id="btnTour" class="chip accent" title="Recorrido automático" aria-label="Recorrido automático">▶</button>
+  </div>
+</header>
+
+<!-- NAVEGACIÓN: pips de circuito -->
+<nav class="hud-nav" id="hudNav" aria-label="Circuitos"></nav>
+
+<!-- PISTA DE INTERACCIÓN -->
+<div class="hud-hint" id="hudHint">arrastrar = orbitar &nbsp;·&nbsp; rueda = zoom &nbsp;·&nbsp; clic en una isla para entrar</div>
+
+<!-- DOCK INFERIOR -->
+<section class="dock" id="dock">
+  <div class="dock-main">
+    <div class="dock-tag" id="dockTag">CIRCUITO 1</div>
+    <h2 class="dock-title" id="dockTitle">El Círculo de los Fisgones</h2>
+    <p class="dock-sin" id="dockSin"></p>
+  </div>
+  <div class="dock-actions">
+    <button class="btn-blood" id="dockOpen">EXPEDIENTE ▸</button>
+    <div class="dock-nav">
+      <button id="prevC" aria-label="Circuito anterior">←</button>
+      <span id="posC">1 / 6</span>
+      <button id="nextC" aria-label="Circuito siguiente">→</button>
+    </div>
+  </div>
+</section>
+
+<!-- EXPEDIENTE (se rellena desde CIRCUITS / SINNERS) -->
+<aside class="panel" id="panel" aria-hidden="true">
+  <button class="panel-x" id="panelX" aria-label="Cerrar expediente">✕</button>
+  <div class="panel-body" id="panelBody"></div>
+</aside>
+
+<div id="nothree" class="hidden">Sin conexión: no se pudo cargar Three.js (CDN). Conéctate a internet y recarga para ver las islas 3D.</div>
+<div class="island-tip" id="islandTip"></div>
+
+<!-- MODAL PECADOR -->
+<div class="modal" id="modal" aria-hidden="true">
+  <div class="modal-card">
+    <button class="modal-x" id="modalX">✕</button>
+    <div class="modal-tag" id="mTag"></div>
+    <h3 id="mName"></h3>
+    <p class="m-alias" id="mAlias"></p>
+    <div class="m-cols">
+      <div><h4>Quién fue</h4><p id="mWho"></p></div>
+      <div><h4>Por qué está aquí</h4><p id="mWhy"></p></div>
+    </div>
+    <div class="m-cast"><h4>Su castigo eterno</h4><p id="mPun"></p></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- BOOT / ENTRADA .onion -->
+<div id="boot" class="boot">
+  <div class="boot-box">
+    <div class="boot-url">https://el-infierno-deepweb.onion</div>
+    <div class="boot-term" id="bootTerm"></div>
+    <button id="bootEnter" class="btn-blood hidden">DESCENDER ⬇</button>
+    <div class="boot-hint">haz clic para entrar · usa audífonos · teclas 1–5 para viajar · T = recorrido</div>
+    <div class="boot-cred">Obra interactiva · <b>El infierno de la deep web</b> · El Subsuelo Digital<br>Santiago Cundumí Solís · Ernive Méndez Ortega · 11-2 · “El Infierno Completo de la Deep Web”</div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

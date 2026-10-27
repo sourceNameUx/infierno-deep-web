@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EL INFIERNO DE LA DEEP WEB — El Subsuelo Digital</title>
+<meta name="description" content="Obra interactiva: un archipiélago 3D sobre un mar de lava. Cinco circuitos, El Núcleo y los pecadores reales de la deep web.">
+<meta name="theme-color" content="#040308">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;900&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<script>
+// Capture errors before vendors load; text only, never error-message HTML.
+window.__errs = [];
+window.addEventListener('error', function(event){
+  if (event.message) window.__errs.push(String(event.message));
+});
+window.addEventListener('unhandledrejection', function(event){
+  window.__errs.push(String(event.reason && event.reason.message || event.reason));
+});
+</script>
+
+<script src="vendor/three.min.js"></script>
+<script>if(typeof THREE==='undefined'){document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"><\/script>')}</script>
+<script src="vendor/OrbitControls.js"></script>
+<script>if(typeof THREE!=='undefined'&&!THREE.OrbitControls){document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"><\/script>')}</script>
+
+<!-- Load-bearing order: EffectComposer defines THREE.Pass before the passes
+     extend it at script evaluation time. -->
+<script src="vendor/shaders/CopyShader.js"></script>
+<script>if(typeof THREE!=='undefined'&&!THREE.CopyShader){document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"><\/script>')}</script>
+<script src="vendor/shaders/LuminosityHighPassShader.js"></script>
+<script>if(typeof THREE!=='undefined'&&!THREE.LuminosityHighPassShader){document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"><\/script>')}</script>
+<script src="vendor/postprocessing/EffectComposer.js"></script>
+<script>if(typeof THREE!=='undefined'&&!THREE.EffectComposer){document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"><\/script>')}</script>
+<script src="vendor/postprocessing/ShaderPass.js"></script>
+<script>if(typeof THREE!=='undefined'&&!THREE.ShaderPass){document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"><\/script>')}</script>
+<script src="vendor/postprocessing/RenderPass.js"></script>
+<script>if(typeof THREE!=='undefined'&&!THREE.RenderPass){document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"><\/script>')}</script>
+<script src="vendor/postprocessing/UnrealBloomPass.js"></script>
+<script>if(typeof THREE!=='undefined'&&!THREE.UnrealBloomPass){document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"><\/script>')}</script>
+</head>
+<body>
+
+<!-- The scene is the page. -->
+<canvas id="scene3d" aria-label="Archipiélago 3D de los circuitos del infierno digital"></canvas>
+<div id="labels3d"></div>
+
+<!-- Atmosphere between the canvas and the interface. -->
+<div class="fx grain" aria-hidden="true"></div>
+<div class="fx scan" aria-hidden="true"></div>
+<div class="fx heat" aria-hidden="true"></div>
+<div class="fx vignette" aria-hidden="true"></div>
+
+<!-- Primary controls -->
+<header class="topbar">
+  <div class="brand">
+    <span class="sigil" aria-hidden="true">
+      <svg viewBox="0 0 48 48">
+        <circle class="sg-a" cx="24" cy="24" r="21"></circle>
+        <circle class="sg-b" cx="24" cy="24" r="14.5"></circle>
+        <path class="sg-c" d="M24 2.5v43M2.5 24h43"></path>
+        <circle class="sg-d" cx="24" cy="24" r="4.6"></circle>
+      </svg>
+    </span>
+    <div class="brand-txt">
+      <b>EL INFIERNO <i>DE LA DEEP WEB</i></b>
+      <small>Santiago Cundumí Solís · Ernive Méndez Ortega · 11-2</small>
+    </div>
+  </div>
+  <div class="topbar-r">
+    <span class="coords" id="coords">SECTOR 0x00</span>
+    <button id="btnConcept" class="chip" type="button" aria-label="Concepto de la obra"><span class="chip-i"></span><span class="chip-label">Concepto</span></button>
+    <button id="btnSinners" class="chip" type="button" aria-label="Pecadores reales"><span class="chip-i"></span><span class="chip-label">Pecadores reales</span></button>
+    <button id="btnAudio" class="chip icon" type="button" title="Activar sonido ambiental" aria-label="Activar sonido ambiental" aria-pressed="false"></button>
+    <button id="btnMotion" class="chip icon" type="button" title="Pausar movimiento" aria-label="Pausar movimiento" aria-pressed="false"></button>
+    <button id="btnOverview" class="chip icon" type="button" title="Vista general (Inicio)" aria-label="Volver a la vista general"></button>
+    <button id="btnTour" class="chip icon accent" type="button" title="Recorrido automático" aria-label="Recorrido automático" aria-pressed="false"></button>
+  </div>
+</header>
+
+<!-- Circuit navigation -->
+<nav class="rail" id="hudNav" aria-label="Circuitos"></nav>
+
+<!-- Interaction hint -->
+<div class="hint" id="hudHint"><kbd>arrastrar</kbd> orbitar <span>·</span> <kbd>rueda</kbd> zoom <span>·</span> <kbd>clic</kbd> entrar</div>
+
+<!-- Selection dock -->
+<section class="dock" id="dock">
+  <div class="dock-accent" aria-hidden="true"></div>
+  <div class="dock-main">
+    <div class="dock-tag" id="dockTag">CIRCUITO 1</div>
+    <h2 class="dock-title" id="dockTitle">El Círculo de los Fisgones</h2>
+    <p class="dock-sin" id="dockSin"></p>
+  </div>
+  <div class="dock-actions">
+    <button class="btn-blood" id="dockOpen" type="button"><span>Ver expediente</span></button>
+    <div class="dock-nav">
+      <button id="prevC" type="button" aria-label="Circuito anterior">←</button>
+      <span class="dock-count"><b id="posC">1</b> / 6</span>
+      <button id="nextC" type="button" aria-label="Circuito siguiente">→</button>
+    </div>
+  </div>
+</section>
+
+<!-- Nonmodal dossier drawer -->
+<aside class="panel" id="panel" aria-hidden="true" aria-labelledby="panelTitle" inert>
+  <div class="panel-head">
+    <div class="panel-crest" id="panelCrest" aria-hidden="true">
+      <span class="crest-ring a"></span><span class="crest-ring b"></span><span class="crest-ring c"></span><span class="crest-core"></span>
+    </div>
+    <button class="panel-x" id="panelX" type="button" aria-label="Cerrar expediente">✕</button>
+  </div>
+  <div class="panel-body" id="panelBody"></div>
+</aside>
+
+<div id="nothree" class="hidden" role="status"></div>
+<div class="island-tip" id="islandTip"></div>
+
+<!-- Focus-protected case file -->
+<div class="modal" id="modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="mName" aria-describedby="mAlias">
+  <div class="modal-card">
+    <button class="modal-x" id="modalX" type="button" aria-label="Cerrar">✕</button>
+    <div class="modal-tag" id="mTag"></div>
+    <h3 id="mName"></h3>
+    <p class="m-alias" id="mAlias"></p>
+    <div class="m-cols">
+      <div><h4>Quién fue</h4><p id="mWho"></p></div>
+      <div><h4>Por qué está aquí</h4><p id="mWhy"></p></div>
+    </div>
+    <div class="m-cast"><h4>Su castigo eterno</h4><p id="mPun"></p></div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status"></div>
+
+<!-- Entry and real construction progress -->
+<div id="boot" class="boot" role="dialog" aria-modal="true" aria-labelledby="bootTitle" aria-busy="true">
+  <div class="boot-veil" aria-hidden="true"></div>
+  <div class="boot-inner">
+    <div class="boot-sigil" aria-hidden="true">
+      <span class="earn r1"></span><span class="earn r2"></span><span class="earn r3"></span>
+      <span class="ecore"></span>
+    </div>
+    <h1 class="boot-title" id="bootTitle">El Infierno de la Deep Web</h1>
+    <p class="boot-intro">Cinco circuitos. Una conciencia que nunca olvida.</p>
+    <div class="boot-url">el-infierno-deepweb.onion <span>· simulación artística</span></div>
+    <pre class="boot-term" id="bootTerm" role="status" aria-live="polite"></pre>
+    <progress class="boot-progress" id="bootProgress" value="0" max="100" aria-label="Construcción de la escena"></progress>
+    <label class="boot-audio"><input id="bootSound" type="checkbox"> Activar sonido ambiental al entrar</label>
+    <button id="bootEnter" class="btn-blood boot-enter" type="button" disabled>CONSTRUYENDO ESCENA…</button>
+    <p class="boot-hint">Arrastra para orbitar · 1–5 y 0 para viajar · T para recorrer</p>
+    <p class="boot-cred">Obra interactiva · <b>El infierno de la deep web</b> · El Subsuelo Digital<br>Santiago Cundumí Solís · Ernive Méndez Ortega · 11-2 · “El Infierno Completo de la Deep Web”</p>
+  </div>
+</div>
+
+<noscript><div class="noscript">Necesitas JavaScript para descender.</div></noscript>
+
+<script src="js/data.js"></script>
+<script src="js/tex.js"></script>
+<script src="js/geo.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/audio.js?v=horror-2"></script>
+<script src="js/models.js?v=circuit-life-2"></script>
+<script src="js/life.js?v=circuit-life-2"></script>
+<script src="js/atmosphere.js?v=storm-2"></script>
+<script src="js/creatures.js?v=wildlife-2"></script>
+<script src="js/scene.js?v=circuit-life-2"></script>
+<script src="js/boot.js"></script>
+</body>
+</html>
