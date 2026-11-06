@@ -319,6 +319,8 @@ APP.MODELS = (function(){
       });
     });
     const reticle = group(root, 'Ground tracking brackets');
+    L.vocal(witness, motion, 1, { period: 5.4, at: 0.35 });
+    L.vocal(witness, motion, 1, { period: 12.5, at: 3.1, kind: 'cry', level: 0.8 });
     for (let i = 0; i < 4; i++){
       const bracket = ring(reticle, 0.87, 0.032, accent, 0, 0, 0, true, 0.8);
       bracket.rotation.z = i * Math.PI / 2;
@@ -405,6 +407,8 @@ APP.MODELS = (function(){
         rig.feet[1].set(0.23, 0.09, -0.04);
       });
       const chainCurve = new THREE.LineCurve3(V(0, 0, 0), V(0, -0.56, 0));
+      L.vocal(captive, motion, 2, { period, at: strikeTime + 0.20 + i * 0.11, level: 0.8 });
+      L.vocal(captive, motion, 2, { period: 13.8, at: 6.8 + i * 2.3, kind: 'cry', level: 0.75 });
       hanger.add(APP.GEO.chain(chainCurve, 5, 0.085, 0.024, M.brass));
       const labelMat = new THREE.MeshBasicMaterial({ map: APP.TEX.barcode('61,255,154', 'LOTE 0' + (i + 1)), toneMapped: false });
       monitor(cage, 0.65, 0.84, accent, labelMat, 0.7, 1.14, 0.87);
@@ -517,6 +521,7 @@ APP.MODELS = (function(){
       rig.feet[1].set(0.23, 0.09, -0.10);
     }
     L.animate(impostor, motion, reach);
+    L.vocal(impostor, motion, 3, { period: 11.6, at: 4.3, kind: 'cry', level: 0.75 });
     const source = V(1.0, 3.8, 2.8);
     for (let i = 0; i < 2; i++){
       const material = L.hologram(i ? 0xe8b8ff : 0xaf79ff, 0.55);
@@ -655,6 +660,8 @@ APP.MODELS = (function(){
       });
     });
     ring(chair, 0.62, 0.025, M.brass, 0, 1.28, 0, true);
+    L.vocal(listener, motion, 4, { period, at: 2.22 });
+    L.vocal(listener, motion, 4, { period: 10.8, at: 4.8, kind: 'cry', level: 0.75 });
     const screen = monitor(root, 3.6, 1.66, accent, M.screens[4], 0, 5.6, -3.85);
     for (const x of [-1.65, 1.65]) rod(root, V(x, 0.8, -3.85), V(x, 5.2, -3.85), 0.10, M.metal);
     screen.rotation.x = -0.12;
@@ -753,6 +760,7 @@ APP.MODELS = (function(){
         ghostMat.uniforms.uDissolve.value = smooth(age, 6.35, 8.35);
       });
       const contact = V(x - 0.256, 3.32, -2.19);
+      L.vocal(ghost, motion, 5, { period, at: 5.85, offset, kind: 'cry', level: 0.85 });
       contacts.push({ start: contact, end: contact, normal: V(0, 0, 1), delay: -offset });
       const fragments = V(x, 2.65, -1.52);
       L.stream(root, motion, { name: 'Unanswered visitor dissolving into data ' + (i + 1),
@@ -851,6 +859,7 @@ APP.MODELS = (function(){
       });
     });
     const intake = V(0.8, 20.6, 2.5), altar = V(0, 15.66, 0), underside = V(0, 17.5, 0);
+    L.vocal(attendant, motion, 0, { period, at: 3.75, level: 0.9 });
     const palms = [V(-1.0, 18, 2.8), V(-0.8, 18, 2.9)];
     const channels = palms.map((palm, i) => {
       const ray = L.beam(root, 0xff7044, 0.14);

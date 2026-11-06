@@ -141,6 +141,20 @@ APP.LIFE = (function(){
     });
   }
 
+  // Trigger once when the animation crosses a cue, never on every recoil frame.
+  // Skip stale cues after offscreen culling; paused poses produce no new sounds.
+  function vocal(figure, motion, circuit, options){
+    let previous = null;
+    return schedule(motion, time => {
+      const clock = time + (options.offset || 0);
+      const cycle = Math.floor((clock - options.at) / options.period);
+      const crossed = previous !== null && cycle !== Math.floor((previous - options.at) / options.period);
+      const timely = previous !== null && clock > previous && clock - previous <= 0.25;
+      previous = clock;
+      if (crossed && timely && APP.AUDIO) APP.AUDIO.character(options.kind || 'pain', figure, circuit, options.level === undefined ? 1 : options.level);
+    });
+  }
+
   function hologram(color, opacity = 0.45){
     return new THREE.ShaderMaterial({
       uniforms: { uColor: { value: new THREE.Color(color).convertSRGBToLinear() },
@@ -319,5 +333,5 @@ APP.LIFE = (function(){
     return mesh;
   }
 
-  return { actor, animate, schedule, pulse, phase, hologram, waves, beam, stream, curtain };
+  return { actor, animate, vocal, schedule, pulse, phase, hologram, waves, beam, stream, curtain };
 })();

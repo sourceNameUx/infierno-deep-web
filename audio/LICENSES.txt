@@ -1,0 +1,23 @@
+Human character voice recordings
+
+All three recordings are licensed under CC0 1.0 Universal:
+https://creativecommons.org/publicdomain/zero/1.0/
+
+pain-short.mp3
+Title: Male Scream
+Creator: aldenroth2
+Source: https://freesound.org/people/aldenroth2/sounds/272023/
+
+pain-long.mp3
+Title: SCREAM.wav
+Creator: vmgraw
+Source: https://freesound.org/people/vmgraw/sounds/257691/
+
+sobbing.mp3
+Title: Man sobbing, crying, or whimpering.mp3
+Creator: SnowFightStudios
+Source: https://freesound.org/people/SnowFightStudios/sounds/643669/
+
+Files are the sources' public high-quality MP3 previews, downloaded unchanged.
+The browser normalizes decoded volume and varies playback rate during use.
+No third-party audio requests are made by the running artwork.
