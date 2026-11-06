@@ -43,7 +43,8 @@ APP.MODELS = (function(){
       const shape = new THREE.Shape();
       const x = w / 2 - r, y = h / 2 - r;
       shape.moveTo(-x, -y); shape.lineTo(x, -y);
-      shape.lineTo(x, y); shape.lineTo(-x, y); shape.closePath();
+      shape.lineTo(x, y); shape.lineTo(-x, y); closePath();
+      function closePath(){ shape.closePath(); }
       const g = new THREE.ExtrudeGeometry(shape, {
         depth: d - 2 * r, steps: 1, bevelEnabled: true,
         bevelThickness: r, bevelSize: r, bevelSegments: 1, curveSegments: 1
@@ -104,6 +105,8 @@ APP.MODELS = (function(){
       brass: new THREE.MeshStandardMaterial({ ...steel, color: 0xb5905c, roughness: 0.52, metalness: 0.85 }),
       dark: new THREE.MeshStandardMaterial({ color: 0x121721, roughness: 0.76, metalness: 0.40 }),
       porcelain: new THREE.MeshStandardMaterial({ color: 0xc6cbc6, roughness: 0.52, metalness: 0.12 }),
+      blood: new THREE.MeshPhysicalMaterial({ color: 0x7a0309, emissive: 0x2b0003, roughness: 0.15, metalness: 0.08, clearcoat: 1, clearcoatRoughness: 0.06 }),
+      bloodGlow: glow(0xff1828, 1.55),
       mirror: new THREE.MeshPhysicalMaterial({ map: T.smokedGlass(), color: 0xbbafd5, metalness: 0.98, roughness: 0.17, clearcoat: 1, clearcoatRoughness: 0.09, envMapIntensity: 2.1 }),
       glass: new THREE.MeshPhysicalMaterial({ color: 0x739aa9, transparent: true, opacity: 0.15, metalness: 0.45, roughness: 0.2, clearcoat: 1, depthWrite: false, side: THREE.DoubleSide }),
       ember: glow(0xff642a, 1.35),
@@ -118,6 +121,20 @@ APP.MODELS = (function(){
       M.screens[c.id] = new THREE.MeshBasicMaterial({ map: T.screen(rgb, null, { seed: c.id + 31 }), color: 0xcbd7df, toneMapped: false });
     });
     return M;
+  }
+
+  function tagCharacter(root, node, meta){
+    if (!root.userData.characters) root.userData.characters = [];
+    const anchor = (node.userData && node.userData.rig && node.userData.rig.head) ? node.userData.rig.head : node;
+    root.userData.characters.push({
+      node,
+      anchor,
+      name: meta.name,
+      alias: meta.alias || '',
+      sinner: meta.sinner || null,
+      kind: meta.kind || 'sinner',
+      offsetY: meta.offsetY === undefined ? 0.62 : meta.offsetY
+    });
   }
 
   /* Bake only rigid meshes. Animated subtrees retain their own coordinates.
@@ -259,8 +276,8 @@ APP.MODELS = (function(){
     return { assembly, iris };
   }
 
-  function mannequin(parent, mat, x, y, z, seated = false){
-    return APP.LIFE.actor(parent, mat, x, y, z, seated);
+  function mannequin(parent, mat, x, y, z, seated = false, profile = null){
+    return APP.LIFE.actor(parent, mat, x, y, z, seated, profile);
   }
 
   function actorPoint(figure, local, out){
@@ -286,6 +303,12 @@ APP.MODELS = (function(){
     cylinder(root, 1.02, 1.65, 3.2, M.metal, 0, 2.45, 0, 12);
     for (let i = 0; i < 9; i++) ring(root, 1.06 - i * 0.025, 0.055, i % 3 === 0 ? accent : M.brass, 0, 1.3 + i * 0.33, 0, true);
     const e = eye(root, 1.72, accent, 0x2ec8ff, 0, 6.15, 0);
+    tagCharacter(root, e.assembly, {
+      name: 'EL OBSERVADOR',
+      alias: 'El Ojo que Todo lo Sabe',
+      kind: 'custodian',
+      offsetY: 2.15
+    });
     for (let i = 0; i < 6; i++){
       const a = i / 6 * TAU;
       tube(root, [V(Math.cos(a) * 1.6, 5.7, Math.sin(a) * 1.6), V(Math.cos(a) * 2.5, 2.6, Math.sin(a) * 2.5), V(Math.cos(a) * 4.3, 0.58, Math.sin(a) * 4.3)], 0.1, M.dark);
@@ -295,29 +318,107 @@ APP.MODELS = (function(){
     ring(halo, 2.51, 0.025, accent);
     halo.rotation.y = 0.5;
     bake(halo); halo.userData.dynamic = true;
-    const witness = mannequin(root, M.porcelain, 0.7, 0.57, 3.75);
+
+    // Sinner 1: Kevin Mitnick ("El Cóndor") — exposed naked skin etched with .txt data veins, shattered glasses & bleeding eyes
+    const witness = mannequin(root, M.porcelain, 0.7, 0.57, 3.75, false, {
+      build: 'normal', skin: 0xd8beb6, top: 0xd8beb6, bottom: 0x1a2634,
+      hair: 'short', hairColor: 0x3b261b, bareChest: true, bareFeet: true, eyeGlow: 0x2ec8ff
+    });
     witness.name = 'Tracked witness shielding their face';
     witness.userData.role = 'tracked-witness';
     witness.scale.setScalar(1.36);
-    box(witness.userData.rig.head, 0.24, 0.026, 0.026, accent, 0, 0.06, 0.21, false);
+    // Shattered wire-frame glasses + bleeding eye sockets
+    ring(witness.userData.rig.head, 0.048, 0.008, M.brass, -0.066, 0.032, 0.185);
+    ring(witness.userData.rig.head, 0.048, 0.008, M.brass, 0.066, 0.032, 0.185);
+    box(witness.userData.rig.head, 0.04, 0.008, 0.01, M.brass, 0, 0.036, 0.19, false);
+    sphere(witness.userData.rig.head, 0.038, M.blood, -0.066, -0.015, 0.185, 8);
+    sphere(witness.userData.rig.head, 0.038, M.blood, 0.066, -0.015, 0.185, 8);
+    // Glowing .txt index circuit veins etched into his bare chest + open chest wound
+    for (let v = 0; v < 4; v++){
+      box(witness.userData.rig.chest, 0.34 - v * 0.05, 0.014, 0.018, accent, 0, 0.08 - v * 0.065, 0.195, false);
+    }
+    sphere(witness.userData.rig.chest, 0.065, M.blood, 0, 0.02, 0.19, 10);
+    tagCharacter(root, witness, {
+      name: 'Kevin Mitnick',
+      alias: 'El Cóndor',
+      sinner: 'Kevin Mitnick',
+      offsetY: 0.55
+    });
+    L.bloodPool(root, motion, { position: V(0.7, 0.88, 3.75), radius: 1.15, seed: 11.4, period: 5.4, offset: 0.2 });
+
     L.animate(witness, motion, (t, rig) => {
       const alarm = L.pulse(t, 5.4, 0.2);
-      const step = Math.sin(t * 2.1);
-      witness.position.x = 0.55 + Math.sin(t * 0.52) * 1.08;
-      witness.rotation.y = -0.18 + Math.sin(t * 0.52) * 0.16;
-      rig.lean = 0.10 + alarm * 0.08;
-      rig.roll = Math.sin(t * 1.05) * 0.06;
-      rig.nod = -0.24 + alarm * 0.15;
-      rig.look = -0.28 + Math.sin(t * 0.52) * 0.22;
-      rig.crouch = 0.05 + alarm * 0.07;
-      rig.breath = Math.sin(t * 1.8);
-      rig.hands[0].set(-0.14, 2.25 - alarm * 0.04, 0.28);
-      rig.hands[1].set(0.43, 1.75 + alarm * 0.16, 0.49);
+      const step = Math.sin(t * 2.3);
+      witness.position.x = 0.55 + Math.sin(t * 0.52) * 1.12;
+      witness.rotation.y = -0.18 + Math.sin(t * 0.52) * 0.22;
+      rig.lean = 0.12 + alarm * 0.22;
+      rig.roll = Math.sin(t * 1.05) * 0.07;
+      rig.nod = -0.22 + alarm * 0.34;
+      rig.look = -0.28 + Math.sin(t * 0.52) * 0.26;
+      rig.crouch = 0.06 + alarm * 0.22;
+      rig.breath = Math.sin(t * 2.2);
+      rig.shake = alarm * 1.15;
+      rig.hands[0].set(-0.12, 2.22 - alarm * 0.06, 0.26);
+      rig.hands[1].set(0.38, 1.78 + alarm * 0.32, 0.44);
       rig.feet.forEach((foot, i) => {
         const stride = step * (i ? 1 : -1);
-        foot.set((i ? 1 : -1) * 0.23, 0.09 + Math.max(0, stride) * 0.075, stride * 0.12);
+        foot.set((i ? 1 : -1) * 0.23, 0.09 + Math.max(0, stride) * 0.085, stride * 0.14);
       });
     });
+
+    // Sinner 2: Christopher Doyon ("Commander X") — broad hooded Anonymous activist with Guy Fawkes mask & chains
+    const doyon = mannequin(root, M.porcelain, -2.35, 0.87, 2.45, false, {
+      build: 'broad', skin: 0xc8aea4, top: 0x141821, bottom: 0x1e2430,
+      shoes: 0x0b0d12, hair: 'hood', beard: true, hairColor: 0x4a4542
+    });
+    doyon.name = 'Chained doxxer reading exposed secrets';
+    doyon.userData.role = 'chained-doxxer';
+    doyon.scale.setScalar(1.26);
+    doyon.rotation.y = 0.62;
+    // Sculpted white Anonymous / Guy Fawkes mask with mustache, goatee & bleeding eyes
+    const anonMask = sphere(doyon.userData.rig.head, 0.175, M.porcelain, 0, -0.01, 0.06, 16);
+    anonMask.scale.set(0.88, 1.16, 0.68);
+    box(doyon.userData.rig.head, 0.13, 0.014, 0.02, M.dark, 0, -0.055, 0.185, false);
+    box(doyon.userData.rig.head, 0.018, 0.055, 0.02, M.dark, 0, -0.095, 0.182, false);
+    sphere(doyon.userData.rig.head, 0.032, M.blood, -0.058, 0.018, 0.182, 8);
+    sphere(doyon.userData.rig.head, 0.032, M.blood, 0.058, 0.018, 0.182, 8);
+    // Heavy iron collar + wrist shackles + chains to floor
+    ring(doyon.userData.rig.chest, 0.14, 0.026, M.metal, 0, 0.22, 0, true);
+    ring(doyon.userData.rig.grips[0], 0.065, 0.018, M.metal, 0, 0, 0, true);
+    ring(doyon.userData.rig.grips[1], 0.065, 0.018, M.metal, 0, 0, 0, true);
+    sphere(doyon.userData.rig.grips[0], 0.058, M.blood, 0, -0.04, 0, 8);
+    sphere(doyon.userData.rig.grips[1], 0.058, M.blood, 0, -0.04, 0, 8);
+    root.add(APP.GEO.chain(new THREE.LineCurve3(V(-2.65, 0.88, 2.75), V(-2.45, 2.65, 2.65)), 7, 0.075, 0.022, M.metal));
+    root.add(APP.GEO.chain(new THREE.LineCurve3(V(-2.05, 0.88, 2.75), V(-2.15, 2.65, 2.65)), 7, 0.075, 0.022, M.metal));
+    tagCharacter(root, doyon, {
+      name: 'Christopher Doyon',
+      alias: 'Commander X',
+      sinner: 'Christopher Doyon',
+      offsetY: 0.55
+    });
+    L.bloodPool(root, motion, { position: V(-2.35, 0.88, 2.45), radius: 0.98, seed: 27.9, period: 5.4, offset: 1.8 });
+    const doyonHead = V(-2.35, 3.2, 2.45), doyonFloor = V(-2.35, 0.88, 2.45);
+    L.blood(root, motion, {
+      name: 'Doyon torn finger blood drips',
+      start: doyonHead, end: doyonFloor,
+      count: 34, radius: 0.28, period: 1.9, size: 1.05, seed: 192
+    });
+    L.animate(doyon, motion, (t, rig) => {
+      const spasm = L.pulse(t, 4.2, 1.1);
+      rig.lean = 0.18 + spasm * 0.25;
+      rig.turn = Math.sin(t * 1.4) * 0.24;
+      rig.nod = -0.15 + Math.sin(t * 2.8) * 0.18 + spasm * 0.28;
+      rig.look = Math.sin(t * 1.9) * 0.38;
+      rig.crouch = 0.14 + spasm * 0.18;
+      rig.breath = Math.sin(t * 2.6);
+      rig.shake = 0.25 + spasm * 1.05;
+      rig.hands[0].set(-0.28, 1.88 + spasm * 0.22, 0.34);
+      rig.hands[1].set(0.28, 1.92 - spasm * 0.18, 0.36);
+      rig.feet[0].set(-0.24, 0.09, 0.08);
+      rig.feet[1].set(0.24, 0.09, -0.08);
+    });
+    L.vocal(doyon, motion, 1, { period: 8.4, at: 2.1, level: 0.75 });
+
     const reticle = group(root, 'Ground tracking brackets');
     L.vocal(witness, motion, 1, { period: 5.4, at: 0.35 });
     L.vocal(witness, motion, 1, { period: 12.5, at: 3.1, kind: 'cry', level: 0.8 });
@@ -330,9 +431,12 @@ APP.MODELS = (function(){
     const source = V(0, 5.5, 1.4), target = V(0.7, 3.4, 3.75), direction = V(0, 0, 1);
     L.waves(root, motion, { name: 'Scanner acquisition rings', color: 0x63dcff,
       emitters: [{ start: source, end: target }], period: 5.4, travel: 2.3,
-      from: 0.19, to: 0.60, copies: 2, power: 0.72 });
-    L.stream(root, motion, { name: 'Extracted surveillance traces', color: 0x91e6ff,
-      start: target, end: source, count: 24, radius: 0.23, period: 2.8, size: 0.44, turns: 3.8 });
+      from: 0.19, to: 0.60, copies: 3, power: 0.85 });
+    L.stream(root, motion, { name: 'Extracted surveillance traces', color: 0x91e6ff, secondaryColor: 0xff1e38,
+      start: target, end: source, count: 44, radius: 0.28, period: 2.4, size: 0.62, turns: 4.2 });
+    L.blood(root, motion, { name: 'Torn eyelid blood spray',
+      start: target, end: target, burst: true, period: 5.4, offset: 0.2,
+      duration: 1.15, count: 38, radius: 0.95, lift: 0.75, size: 1.2, seed: 311 });
     L.schedule(motion, t => {
       actorPoint(witness, witness.userData.rig.head.position, target);
       direction.subVectors(target, e.assembly.position).normalize();
@@ -378,6 +482,20 @@ APP.MODELS = (function(){
         wing.rotation.z = Math.sin(t * 0.47 + side) * 0.014;
       });
     }
+    const cageCharacters = [
+      {
+        name: 'Ross Ulbricht', alias: 'Dread Pirate Roberts', sinner: 'Ross Ulbricht',
+        profile: { build: 'normal', skin: 0xc8a49c, top: 0xc8a49c, bottom: 0x1c222a, hair: 'messy', hairColor: 0x241711, bareChest: true }
+      },
+      {
+        name: 'Jong Woo Son', alias: 'Welcome to Video', sinner: 'Jong Woo Son',
+        profile: { build: 'gaunt', skin: 0xc4b0a4, top: 0x2c363a, bottom: 0x20282c, hair: 'short', hairColor: 0x0d0d11 }
+      },
+      {
+        name: 'Lote #03 · Mercader', alias: 'Carne en Subasta', sinner: 'Ross Ulbricht',
+        profile: { build: 'gaunt', skin: 0x9e726a, top: 0x9e726a, bottom: 0x1b1515, hair: 'bald', bareChest: true, bareFeet: true }
+      }
+    ];
     for (let i = 0; i < 3; i++){
       const x = (i - 1) * 3.4, z = -1.35;
       const hanger = group(root, 'Suspended lot', x, 6.62, z);
@@ -388,21 +506,45 @@ APP.MODELS = (function(){
       }
       for (const h of [0, 0.35, 2.1, 2.5]) ring(cage, 0.93, 0.067, M.brass, 0, h, 0, true);
       cylinder(cage, 0.93, 0.98, 0.15, M.dark, 0, 0, 0, 20);
+      cylinder(cage, 0.85, 0.85, 0.04, M.blood, 0, 0.08, 0, 18);
       cylinder(cage, 0.15, 0.92, 0.55, M.metal, 0, 2.77, 0, 10);
-      const captive = mannequin(cage, M.porcelain, 0, 0.1, 0.2);
+      const captive = mannequin(cage, M.porcelain, 0, 0.1, 0.2, false, cageCharacters[i].profile);
       captive.name = 'Captive gripping the auction bars';
       captive.userData.role = 'captive';
       captive.scale.setScalar(0.94);
+      if (i === 0){
+        // Ross Ulbricht: "piel-mostrador, brazos-ganchos" — open rib-counter chest + meat-hook hands
+        box(captive.userData.rig.chest, 0.32, 0.26, 0.08, M.blood, 0, 0.02, 0.17);
+        for (let r = -1; r <= 1; r++) box(captive.userData.rig.chest, 0.28, 0.024, 0.04, M.porcelain, 0, r * 0.075, 0.21, false);
+        box(captive.userData.rig.chest, 0.18, 0.09, 0.02, accent, 0, 0.16, 0.21, false);
+        for (const g of captive.userData.rig.grips){
+          ring(g, 0.085, 0.018, M.metal, 0, -0.07, 0.02, false, Math.PI * 1.35);
+        }
+      } else if (i === 1){
+        // Jong Woo Son: barcode stamped on forehead + bloodied amputated fingers + floating child-mask echoes
+        box(captive.userData.rig.head, 0.13, 0.045, 0.02, accent, 0, 0.11, 0.185, false);
+        ring(captive.userData.rig.chest, 0.135, 0.024, M.brass, 0, 0.22, 0, true);
+        for (const g of captive.userData.rig.grips) sphere(g, 0.068, M.blood, 0, -0.04, 0.02, 8);
+      } else {
+        // Lote #03: iron muzzle + butcher hooks in chest
+        cylinder(captive.userData.rig.head, 0.12, 0.10, 0.11, M.metal, 0, -0.06, 0.12, 10);
+        sphere(captive.userData.rig.chest, 0.11, M.blood, 0, 0.01, 0.17, 10);
+      }
+      tagCharacter(root, captive, {
+        ...cageCharacters[i],
+        offsetY: 0.58
+      });
       L.animate(captive, motion, (t, rig) => {
         const recoil = impact(t - 0.20 - i * 0.11);
-        rig.lean = 0.055 - recoil * 0.065;
-        rig.turn = Math.sin(t * 0.51 + i) * 0.07;
-        rig.nod = 0.05 + recoil * 0.27;
-        rig.look = (1 - i) * 0.24 + Math.sin(t * 0.33 + i) * 0.12;
-        rig.crouch = 0.04 + recoil * 0.12;
-        rig.breath = Math.sin(t * 1.6 + i * 2);
-        rig.hands[0].set(-0.296, 1.72, 0.698);
-        rig.hands[1].set(0.296, 1.72, 0.698);
+        rig.lean = 0.06 - recoil * 0.18;
+        rig.turn = Math.sin(t * 0.51 + i) * 0.11;
+        rig.nod = 0.05 + recoil * 0.38;
+        rig.look = (1 - i) * 0.24 + Math.sin(t * 0.33 + i) * 0.16;
+        rig.crouch = 0.05 + recoil * 0.26;
+        rig.breath = Math.sin(t * 1.9 + i * 2);
+        rig.shake = recoil * 1.35;
+        rig.hands[0].set(-0.296, 1.72 - recoil * 0.12, 0.698);
+        rig.hands[1].set(0.296, 1.72 - recoil * 0.12, 0.698);
         rig.feet[0].set(-0.23, 0.09, 0.08);
         rig.feet[1].set(0.23, 0.09, -0.04);
       });
@@ -414,34 +556,88 @@ APP.MODELS = (function(){
       monitor(cage, 0.65, 0.84, accent, labelMat, 0.7, 1.14, 0.87);
       bake(hanger); hanger.userData.dynamic = true;
       hanger.userData.mechanism = 'suspended-cage';
+
+      // Continuous blood dripping from the meat cages onto the stitched skin floor
+      const dripOrigin = V(x, 3.45, z);
+      const dripFloor = V(x, 0.59, z);
+      L.bloodPool(root, motion, {
+        position: V(x, 0.595, z),
+        radius: 1.35,
+        seed: 41.2 + i * 13.7,
+        period,
+        offset: -strikeTime - 0.20 - i * 0.11
+      });
+      L.blood(root, motion, {
+        name: 'Dripping cage blood ' + (i + 1),
+        start: dripOrigin, end: dripFloor,
+        count: 42, radius: 0.52, period: 1.55 + i * 0.18, size: 1.15, seed: 601 + i * 19
+      });
+      const cageCenter = V(x, 4.5, z);
+      L.blood(root, motion, {
+        name: 'Cage flesh extraction splatter ' + (i + 1),
+        start: cageCenter, end: cageCenter,
+        burst: true, period, offset: -strikeTime - 0.20 - i * 0.11,
+        duration: 1.05, count: 38, radius: 1.15, lift: 0.75, size: 1.25, seed: 650 + i
+      });
+
       const signalEnd = V(x, 4.9, z + 0.15);
       const signal = L.stream(root, motion, { name: 'Auction result sent to cage ' + (i + 1),
-        color: 0x69ffb3, start: signalOrigin, end: signalEnd, count: 20,
-        radius: 0.13, lift: 0.65, period: 1.9, size: 0.45, seed: 541 + i });
+        color: 0x69ffb3, secondaryColor: 0xff1828, start: signalOrigin, end: signalEnd, count: 34,
+        radius: 0.18, lift: 0.65, period: 1.9, size: 0.55, seed: 541 + i });
       L.schedule(motion, t => {
         const recoil = impact(t - 0.20 - i * 0.11);
-        hanger.rotation.z = Math.sin(t * 0.65 + i * 1.9) * 0.043 + Math.sin(t * 2.9 + i) * recoil * 0.035;
-        hanger.rotation.x = Math.sin(t * 0.47 + i) * 0.019;
+        hanger.rotation.z = Math.sin(t * 0.65 + i * 1.9) * 0.052 + Math.sin(t * 4.5 + i) * recoil * 0.068;
+        hanger.rotation.x = Math.sin(t * 0.47 + i) * 0.024;
         labelMat.color.setScalar(0.67 + recoil * 0.55);
-        signal.material.uniforms.uPower.value = 0.15 + recoil * 1.1;
+        signal.material.uniforms.uPower.value = 0.22 + recoil * 1.15;
         signalEnd.x = x - Math.sin(hanger.rotation.z) * -1.7;
       });
     }
     cylinder(root, 1.36, 1.55, 0.65, M.metal, 0, 0.96, 3.1, 24);
-    const seller = mannequin(root, M.dark, 0, 1.31, 3.1);
+    // EL SUBASTADOR: "alto y delgado, traje de contratos, dedos-jeringa, ojos-cámara. Sin rostro: solo una pantalla"
+    const seller = mannequin(root, M.dark, 0, 1.31, 3.1, false, {
+      build: 'tall', skin: 0x8f8886, top: 0x0b0e14, bottom: 0x080a0f, shoes: 0x040507,
+      hair: 'none', faceless: true
+    });
     seller.name = 'Auctioneer delivering the verdict';
     seller.userData.role = 'auctioneer';
     seller.scale.set(1.12, 1.45, 1.12);
+    // Tailored suit lapels, crimson contract tie & brass contract seals on chest
+    box(seller.userData.rig.chest, 0.14, 0.26, 0.03, M.porcelain, 0, 0.08, 0.185, false);
+    box(seller.userData.rig.chest, 0.045, 0.32, 0.035, M.bloodGlow, 0, 0.02, 0.198, false);
+    for (const s of [-1, 1]){
+      const lapel = box(seller.userData.rig.chest, 0.11, 0.34, 0.035, M.brass, s * 0.12, 0.04, 0.19, false);
+      lapel.rotation.z = -s * 0.22;
+    }
+    // Dedos-jeringa (long hypodermic syringe needles on his left hand)
+    for (let n = 0; n < 4; n++){
+      const spread = (n - 1.5) * 0.028;
+      cylinder(seller.userData.rig.grips[0], 0.012, 0.012, 0.11, accent, spread, -0.08, 0.03, 6);
+      cylinder(seller.userData.rig.grips[0], 0.004, 0.001, 0.22, M.metal, spread, -0.22, 0.03, 6);
+    }
     const price = new THREE.MeshBasicMaterial({ map: APP.TEX.barcode('61,255,154', 'SIN PRECIO'), toneMapped: false });
     monitor(seller.userData.rig.head, 0.78, 0.51, accent, price, 0, 0, 0.16);
+    // Ojos-cámara mounted above the bid screen
+    for (const s of [-1, 1]){
+      const camLens = cylinder(seller.userData.rig.head, 0.075, 0.085, 0.18, M.metal, s * 0.19, 0.31, 0.18, 12);
+      camLens.rotation.x = Math.PI / 2;
+      sphere(seller.userData.rig.head, 0.055, accent, s * 0.19, 0.31, 0.27, 10);
+    }
     bake(seller.userData.rig.head);
+    tagCharacter(root, seller, {
+      name: 'EL SUBASTADOR',
+      alias: 'Custodio del Mercado',
+      kind: 'custodian',
+      offsetY: 0.72
+    });
     box(root, 1.75, 1.60, 0.85, M.brass, 0, 2.12, 3.85);
-    cylinder(root, 0.28, 0.31, 0.08, M.dark, 0.64, 2.96, 3.90, 20);
+    cylinder(root, 0.28, 0.31, 0.08, M.blood, 0.64, 2.96, 3.90, 20);
+    L.bloodPool(root, motion, { position: V(0, 0.60, 3.4), radius: 1.5, seed: 88.3, period, offset: -strikeTime });
     const gavel = group(seller.userData.rig.grips[1], 'Articulated auction gavel');
     rod(gavel, V(0, 0.05, 0), V(0.05, -0.40, 0.10), 0.038, M.brass);
     const head = cylinder(gavel, 0.14, 0.14, 0.38, M.dark, 0.05, -0.40, 0.10, 12);
     head.rotation.z = Math.PI / 2;
-    const band = cylinder(gavel, 0.145, 0.145, 0.075, accent, 0.05, -0.40, 0.10, 12);
+    const band = cylinder(gavel, 0.145, 0.145, 0.075, M.bloodGlow, 0.05, -0.40, 0.10, 12);
     band.rotation.z = Math.PI / 2;
     bake(gavel);
     gavel.userData.mechanism = 'gavel';
@@ -449,28 +645,31 @@ APP.MODELS = (function(){
       const age = L.phase(t, period);
       const lift = smooth(age, 0.12, 1.20) * (1 - smooth(age, 1.45, strikeTime));
       const strike = impact(t);
-      rig.lean = 0.025 + strike * 0.085;
-      rig.turn = Math.sin(t * 0.34) * 0.065;
-      rig.nod = -lift * 0.08 + strike * 0.16;
-      rig.look = Math.sin(t * 0.41) * 0.19;
-      rig.breath = Math.sin(t * 1.3);
-      rig.hands[0].set(-0.43, 1.22, 0.50);
-      rig.hands[1].set(0.52, 1.69 + lift * 0.63, 0.61 - lift * 0.32);
-      gavel.rotation.x = -lift * 0.95;
+      rig.lean = 0.03 + strike * 0.16 - lift * 0.06;
+      rig.turn = Math.sin(t * 0.34) * 0.11;
+      rig.nod = -lift * 0.14 + strike * 0.24;
+      rig.look = Math.sin(t * 0.41) * 0.22;
+      rig.breath = Math.sin(t * 1.5);
+      rig.hands[0].set(-0.46, 1.35 + strike * 0.35, 0.58 + strike * 0.18);
+      rig.hands[1].set(0.52, 1.69 + lift * 0.72, 0.61 - lift * 0.34);
+      gavel.rotation.x = -lift * 1.05;
       price.color.setScalar(0.77 + strike * 0.4);
     });
-    L.stream(root, motion, { name: 'Gavel impact fragments', color: 0x9effce,
+    L.stream(root, motion, { name: 'Gavel impact fragments', color: 0x9effce, secondaryColor: 0xff1828,
       start: signalOrigin, end: signalOrigin, burst: true, period, offset: -strikeTime,
-      duration: 0.95, count: 30, radius: 1.05, lift: 0.65, size: 0.44 });
+      duration: 0.95, count: 42, radius: 1.25, lift: 0.75, size: 0.56 });
+    L.blood(root, motion, { name: 'Gavel blood splatter',
+      start: signalOrigin, end: signalOrigin, burst: true, period, offset: -strikeTime,
+      duration: 1.0, count: 44, radius: 1.35, lift: 0.85, size: 1.25, seed: 712 });
     L.waves(root, motion, { name: 'Gavel impact signal', color: 0x53ffa5,
       emitters: [{ start: signalOrigin, end: signalOrigin }], period, offset: -strikeTime,
-      copies: 2, travel: 1.2, from: 0.15, to: 1.45, power: 0.7 });
+      copies: 3, travel: 1.2, from: 0.15, to: 1.65, power: 0.85 });
     for (const side of [-1, 1]){
       const counter = group(root, 'Auction counter', side * 3.8, 0.4, 3.0);
       box(counter, 2.7, 1.05, 1.1, M.metal, 0, 0.65, 0);
       box(counter, 2.9, 0.12, 1.25, M.brass, 0, 1.24, 0);
       mesh(counter, new THREE.PlaneGeometry(2.25, 0.9), M.glass, 0, 0.67, 0.57);
-      for (let i = 0; i < 5; i++) cylinder(counter, 0.12, 0.12, 0.45, M.dark, -0.8 + i * 0.4, 1.54, 0, 8);
+      for (let i = 0; i < 5; i++) cylinder(counter, 0.12, 0.12, 0.45, i % 2 ? M.blood : M.dark, -0.8 + i * 0.4, 1.54, 0, 8);
     }
   }
 
@@ -500,48 +699,106 @@ APP.MODELS = (function(){
       for (const side of [-1, 1]) box(portal, 0.035, 5.3, 0.04, accent, side * 1.5, 2.75, 0.18, false);
       L.curtain(portal, motion, 0xbd73ff, 2.98, 5.18, i * 0.26).position.set(0, 2.75, 0.12);
     }
-    const impostor = mannequin(root, M.porcelain, 0.30, 1, 2.05);
+    // EL SUPLANTADOR: "sin forma fija: anciano, niño, tú mismo" — three-faced shifting mirror mask & aristocratic coat
+    const impostor = mannequin(root, M.porcelain, 0.30, 1, 2.05, false, {
+      build: 'tall', skin: 0xd6cedc, top: 0x1c132b, bottom: 0x110b1c,
+      hair: 'slick', hairColor: 0x2a1e3d, faceless: true
+    });
     impostor.name = 'Identity source reaching into the reconstruction';
     impostor.userData.role = 'identity-source';
     impostor.scale.setScalar(1.42);
     impostor.rotation.y = -0.18;
     const mask = mesh(impostor.userData.rig.head, cached('identity-mask', () => new THREE.SphereGeometry(0.19, 16, 10)), M.mirror, 0, 0, 0.11);
     mask.scale.set(0.86, 1.2, 0.65);
+    for (const s of [-1, 1]){
+      const sideFace = mesh(impostor.userData.rig.head, cached('identity-mask', () => new THREE.SphereGeometry(0.19, 16, 10)), M.porcelain, s * 0.15, 0.02, 0.04);
+      sideFace.scale.set(0.68, 0.95, 0.52);
+      sideFace.rotation.y = s * 0.65;
+    }
+    ring(impostor.userData.rig.chest, 0.24, 0.032, M.brass, 0, 0.21, -0.02, true);
+    box(impostor.userData.rig.chest, 0.18, 0.28, 0.03, M.mirror, 0, 0.02, 0.19, false);
+    tagCharacter(root, impostor, {
+      name: 'EL SUPLANTADOR',
+      alias: 'Ladrón de Identidades',
+      kind: 'custodian',
+      offsetY: 0.62
+    });
+    L.bloodPool(root, motion, { position: V(0.30, 0.88, 2.05), radius: 1.18, seed: 33.4, period: 3.8 });
+
     function reach(t, rig){
-      const extension = 0.5 + Math.sin(t * 0.76) * 0.5;
-      rig.lean = 0.06 + extension * 0.10;
-      rig.turn = Math.sin(t * 0.38) * 0.16;
-      rig.roll = Math.sin(t * 0.55) * 0.035;
-      rig.nod = -0.08 + extension * 0.13;
-      rig.look = 0.20 + Math.sin(t * 0.38) * 0.24;
-      rig.breath = Math.sin(t * 1.7);
-      rig.hands[0].set(-0.37, 1.15 + extension * 0.30, 0.24);
-      rig.hands[1].set(0.57, 1.75 + extension * 0.32, 0.39 + extension * 0.22);
+      const extension = 0.5 + Math.sin(t * 0.88) * 0.5;
+      const rip = L.pulse(t, 3.8, 0.4);
+      rig.lean = 0.06 + extension * 0.14 - rip * 0.12;
+      rig.turn = Math.sin(t * 0.45) * 0.22;
+      rig.roll = Math.sin(t * 0.65) * 0.05;
+      rig.nod = -0.10 + extension * 0.18 + rip * 0.22;
+      rig.look = 0.20 + Math.sin(t * 0.45) * 0.28;
+      rig.breath = Math.sin(t * 1.9);
+      rig.shake = rip * 0.85;
+      rig.hands[0].set(-0.37, 1.15 + extension * 0.36, 0.24);
+      rig.hands[1].set(0.57, 1.75 + extension * 0.38, 0.39 + extension * 0.26);
       rig.feet[0].set(-0.23, 0.09, 0.12);
       rig.feet[1].set(0.23, 0.09, -0.10);
     }
     L.animate(impostor, motion, reach);
     L.vocal(impostor, motion, 3, { period: 11.6, at: 4.3, kind: 'cry', level: 0.75 });
     const source = V(1.0, 3.8, 2.8);
+    const echoIdentities = [
+      { name: 'Vitalii Chychasov', alias: 'El Vendedor de Números', sinner: 'Vitalii Chychasov' },
+      { name: 'Alexandru Habasescu', alias: 'Arquitecto de xDedic', sinner: 'Alexandru Habasescu' }
+    ];
     for (let i = 0; i < 2; i++){
       const material = L.hologram(i ? 0xe8b8ff : 0xaf79ff, 0.55);
-      const echo = mannequin(root, material, i ? -1.25 : 1.8, 1.05, i ? -0.85 : 0.32);
+      const echo = mannequin(root, material, i ? -1.25 : 1.8, 1.05, i ? -0.85 : 0.32, false, {
+        build: i ? 'broad' : 'normal', hair: 'short'
+      });
       echo.name = 'Delayed holographic identity ' + (i + 1);
       echo.userData.role = 'identity-echo';
       echo.userData.delay = 0.72 + i * 0.75;
       echo.scale.setScalar(1.42);
       echo.rotation.y = -0.18;
+      if (i === 0){
+        // Vitalii Chychasov: "Es un espejo roto en mil pedazos" — jagged mirror shards impaled in chest & shoulders
+        for (let s = 0; s < 6; s++){
+          const ang = (s / 6) * TAU;
+          const shard = mesh(echo.userData.rig.chest, cached('vitalii-shard', () => new THREE.ConeGeometry(0.08, 0.38, 4)), M.mirror,
+            Math.cos(ang) * 0.16, (s % 3 - 1) * 0.09, 0.14 + Math.sin(ang) * 0.08);
+          shard.rotation.set(0.7 + s * 0.3, ang, (s - 2.5) * 0.4);
+        }
+      } else {
+        // Alexandru Habasescu: "Es una puerta de metal y carne con cerradura en el pecho"
+        box(echo.userData.rig.chest, 0.36, 0.42, 0.12, M.metal, 0, 0.02, 0.15);
+        box(echo.userData.rig.chest, 0.30, 0.36, 0.13, M.blood, 0, 0.02, 0.155);
+        ring(echo.userData.rig.chest, 0.075, 0.02, M.brass, 0, 0.05, 0.23);
+        box(echo.userData.rig.chest, 0.045, 0.11, 0.03, M.bloodGlow, 0, -0.01, 0.23, false);
+      }
+      tagCharacter(root, echo, {
+        ...echoIdentities[i],
+        offsetY: 0.62
+      });
+      L.bloodPool(root, motion, {
+        position: V(echo.position.x, 0.88, echo.position.z),
+        radius: 0.92,
+        seed: 52.1 + i * 17,
+        period: 3.8,
+        offset: -echo.userData.delay
+      });
       const target = V(echo.position.x, 3.8, echo.position.z);
       const fragments = L.stream(root, motion, { name: 'Identity copied into echo ' + (i + 1),
-        color: i ? 0xe2a8ff : 0xb97eff, start: source, end: target,
-        count: 32, radius: 0.32, lift: 0.32, turns: 4.5, period: 2.7, size: 0.43, seed: 773 + i });
+        color: i ? 0xe2a8ff : 0xb97eff, secondaryColor: 0xff1834, start: source, end: target,
+        count: 46, radius: 0.36, lift: 0.38, turns: 4.8, period: 2.4, size: 0.58, seed: 773 + i });
+      L.blood(root, motion, {
+        name: 'Chest keyhole blood extraction ' + (i + 1),
+        start: target, end: V(echo.position.x, 0.9, echo.position.z),
+        count: 28, radius: 0.32, period: 2.1, size: 1.05, seed: 790 + i
+      });
       L.animate(echo, motion, (t, rig) => {
         const delayed = t - echo.userData.delay;
         reach(delayed, rig);
         echo.position.y = 1.05 + Math.sin(delayed * 0.76) * 0.045;
         material.uniforms.uTime.value = delayed;
-        material.uniforms.uOpacity.value = 0.38 + (0.5 + Math.sin(delayed * 0.76) * 0.5) * 0.28;
-        fragments.material.uniforms.uPower.value = 0.48 + Math.sin(delayed * 0.76) * 0.22;
+        material.uniforms.uOpacity.value = 0.42 + (0.5 + Math.sin(delayed * 0.76) * 0.5) * 0.32;
+        fragments.material.uniforms.uPower.value = 0.58 + Math.sin(delayed * 0.76) * 0.28;
       });
       L.schedule(motion, () => { actorPoint(echo, echo.userData.rig.grips[1].position, target); });
     }
@@ -639,29 +896,107 @@ APP.MODELS = (function(){
     }
     box(chair, 1.0, 0.13, 0.94, M.dark, 0, 0.84, 0);
     box(chair, 0.86, 0.83, 0.12, M.dark, 0, 1.37, -0.38);
-    const listener = mannequin(chair, M.porcelain, 0, 0.12, 0, true);
+
+    // Sinner 1: Aydin Coban — strapped to the Chorus chair with eyelid-retractor head cage & bleeding ears
+    const listener = mannequin(chair, M.porcelain, 0, 0.12, 0, true, {
+      build: 'normal', skin: 0xcbb2a8, top: 0x3b2219, bottom: 0x1c2028,
+      hair: 'short', hairColor: 0x261c18, eyeGlow: 0xff6a2a
+    });
     listener.name = 'Listener covering their ears and recoiling';
     listener.userData.role = 'listener';
+    // Metal head-clamp & eyelid speculum forcing him to watch the screens
+    ring(listener.userData.rig.head, 0.195, 0.018, M.metal, 0, 0.03, 0, true);
+    ring(listener.userData.rig.head, 0.195, 0.016, M.brass, 0, 0.08, 0, false);
+    box(listener.userData.rig.head, 0.22, 0.025, 0.04, M.metal, 0, 0.035, 0.185, false);
+    sphere(listener.userData.rig.head, 0.068, M.blood, -0.175, 0, 0.01, 8);
+    sphere(listener.userData.rig.head, 0.068, M.blood, 0.175, 0, 0.01, 8);
+    // Heavy chest restraint straps
+    box(listener.userData.rig.chest, 0.52, 0.065, 0.36, M.brass, 0, 0.04, 0, false);
+    box(listener.userData.rig.chest, 0.07, 0.44, 0.36, M.metal, 0, 0.02, 0, false);
+    tagCharacter(root, listener, {
+      name: 'Aydin Coban',
+      alias: 'Depredador de Amanda Todd',
+      sinner: 'Aydin Coban',
+      offsetY: 0.62
+    });
+    L.bloodPool(root, motion, { position: V(0, 1.18, 0.35), radius: 1.55, seed: 64.2, period, offset: -2.22 });
+    const listenerHeadWorld = V(0, 3.65, 0.35);
+    L.blood(root, motion, {
+      name: 'Sonic pressure ear-bleed splatter',
+      start: listenerHeadWorld, end: listenerHeadWorld,
+      burst: true, period, offset: 0.55 - 2.22,
+      duration: 1.05, count: 44, radius: 1.35, lift: 0.85, size: 1.3, seed: 842
+    });
+    L.blood(root, motion, {
+      name: 'Dripping blood from chair',
+      start: listenerHeadWorld, end: V(0, 1.18, 0.35),
+      count: 34, radius: 0.38, period: 1.7, size: 1.1, seed: 849
+    });
+
     L.animate(listener, motion, (t, rig) => {
       const age = L.phase(t, period);
       const cover = smooth(age, 0.20, 1.15) * (1 - smooth(age, 2.85, 3.52));
       const recoil = L.pulse(t, period, 0.55 - 2.22);
-      rig.lean = 0.07 - recoil * 0.23;
-      rig.roll = Math.sin(t * 7.2) * recoil * 0.085;
-      rig.nod = 0.10 + recoil * 0.20;
-      rig.look = Math.sin(t * 0.9) * (1 - cover) * 0.25;
-      rig.crouch = recoil * 0.025;
-      rig.breath = Math.sin(t * 2.2);
+      rig.lean = 0.07 - recoil * 0.32;
+      rig.roll = Math.sin(t * 9.5) * recoil * 0.14;
+      rig.nod = 0.10 + recoil * 0.32;
+      rig.look = Math.sin(t * 0.9) * (1 - cover) * 0.25 + Math.sin(t * 14.0) * recoil * 0.22;
+      rig.crouch = recoil * 0.05;
+      rig.breath = Math.sin(t * 2.8);
+      rig.shake = recoil * 1.45;
       rig.hands.forEach((hand, i) => {
         const side = i ? 1 : -1;
-        hand.set(side * (0.40 - cover * 0.15), 1.02 + cover * 0.56,
+        hand.set(side * (0.40 - cover * 0.16), 1.02 + cover * 0.58,
           0.53 * (1 - cover) + Math.sin(rig.lean) * 0.80 * cover);
-        rig.feet[i].set(side * 0.21, 0.09 + recoil * 0.075, 0.63 - recoil * 0.075);
+        rig.feet[i].set(side * 0.21, 0.09 + recoil * 0.14, 0.63 - recoil * 0.12);
       });
     });
     ring(chair, 0.62, 0.025, M.brass, 0, 1.28, 0, true);
     L.vocal(listener, motion, 4, { period, at: 2.22 });
     L.vocal(listener, motion, 4, { period: 10.8, at: 4.8, kind: 'cry', level: 0.75 });
+
+    // Sinner 2: El Coro Anónimo ("Los que ríen detrás") — hooded figures with megaphone-mouths & keyboard armor
+    const chorusSides = [
+      { x: -2.35, z: -1.35, name: 'El Coro Anónimo', alias: 'Los que ríen detrás' },
+      { x: 2.35, z: -1.35, name: 'EL CORO', alias: 'Miles de Voces' }
+    ];
+    chorusSides.forEach((cfg, idx) => {
+      const tormentor = mannequin(root, M.dark, cfg.x, 1.18, cfg.z, false, {
+        build: idx ? 'broad' : 'normal', skin: 0x948682, top: 0x17111b, bottom: 0x0e0a11,
+        hair: 'hood', faceless: true
+      });
+      tormentor.name = cfg.name;
+      tormentor.userData.role = 'chorus-tormentor';
+      tormentor.scale.setScalar(1.22);
+      tormentor.rotation.y = Math.atan2(-cfg.x, 0.35 - cfg.z);
+      // Acoustic megaphone horn protruding from face ("Son voces sin boca")
+      const horn = cylinder(tormentor.userData.rig.head, 0.14, 0.045, 0.24, M.brass, 0, -0.02, 0.24, 14);
+      horn.rotation.x = Math.PI / 2;
+      ring(tormentor.userData.rig.head, 0.135, 0.018, accent, 0, -0.02, 0.35);
+      // Broken keyboard-plate chest armor
+      box(tormentor.userData.rig.chest, 0.38, 0.22, 0.06, M.metal, 0, 0.06, 0.18);
+      box(tormentor.userData.rig.chest, 0.30, 0.04, 0.07, accent, 0, 0.06, 0.19, false);
+      tagCharacter(root, tormentor, {
+        name: cfg.name,
+        alias: cfg.alias,
+        sinner: 'El Coro Anónimo',
+        kind: idx === 1 ? 'custodian' : 'sinner',
+        offsetY: 0.58
+      });
+      L.animate(tormentor, motion, (t, rig) => {
+        const laugh = L.pulse(t, period, 0.35 - idx * 0.22);
+        rig.lean = 0.12 + laugh * 0.16;
+        rig.turn = Math.sin(t * 1.1 + idx) * 0.14;
+        rig.nod = -0.14 - Math.abs(Math.sin(t * 6.5)) * laugh * 0.28;
+        rig.breath = Math.sin(t * 3.8 + idx);
+        rig.shake = laugh * 0.65;
+        rig.hands[0].set(-0.32, 1.25 + laugh * 0.2, 0.28);
+        rig.hands[1].set(0.18, 1.62 + laugh * 0.25, 0.68);
+        rig.feet[0].set(-0.22, 0.09, 0.06);
+        rig.feet[1].set(0.22, 0.09, -0.06);
+      });
+    });
+
     const screen = monitor(root, 3.6, 1.66, accent, M.screens[4], 0, 5.6, -3.85);
     for (const x of [-1.65, 1.65]) rod(root, V(x, 0.8, -3.85), V(x, 5.2, -3.85), 0.10, M.metal);
     screen.rotation.x = -0.12;
@@ -686,11 +1021,11 @@ APP.MODELS = (function(){
     });
     L.waves(root, motion, { name: 'Speaker pressure waves converging on the listener',
       color: 0xffa45b, emitters, period, offset: -0.20, travel: 1.85,
-      from: 0.43, to: 1.05, copies: 3, spacing: 0.25, thickness: 0.035, power: 0.95 });
+      from: 0.43, to: 1.05, copies: 3, spacing: 0.25, thickness: 0.038, power: 1.05 });
     const stageImpact = V(0, 1.23, 0.35);
-    L.waves(root, motion, { name: 'Pressure traveling through the stage', color: 0xff7136,
+    L.waves(root, motion, { name: 'Pressure traveling through the stage', color: 0xff3b22,
       emitters: [{ start: stageImpact, end: stageImpact }], period, offset: -2.12,
-      copies: 2, travel: 1.35, from: 0.7, to: 3.15, power: 0.48 });
+      copies: 3, travel: 1.35, from: 0.7, to: 3.25, power: 0.65 });
   }
 
   function abandoned(root, accent, motion){
@@ -706,6 +1041,12 @@ APP.MODELS = (function(){
     }
     box(gate, 5.15, 0.63, 0.85, M.metal, 0, 7.5, 0);
     box(gate, 3.4, 6.45, 0.19, M.dark, 0, 3.87, -0.2);
+    tagCharacter(root, gate, {
+      name: 'EL VACÍO',
+      alias: 'Pantalla del Olvido · 99%',
+      kind: 'custodian',
+      offsetY: 8.1
+    });
     const progressMat = new THREE.MeshBasicMaterial({ map: APP.TEX.wrapTex(APP.TEX.paint(256, 128, g => {
       g.fillStyle = '#03080c'; g.fillRect(0, 0, 256, 128);
       g.strokeStyle = '#93b8cd'; g.lineWidth = 1; g.strokeRect(24, 69, 208, 7);
@@ -727,15 +1068,29 @@ APP.MODELS = (function(){
       box(stone, 0.49, h * 0.6, 0.06, M.dark, 0, h * 0.58, 0.19);
       box(stone, 0.17, 0.017, 0.03, accent, 0, h * 0.35, 0.23, false);
     }
+    const ghostTags = [
+      { name: 'Alma Omitida', alias: 'Espectro sin Visto', sinner: 'El Lurker Eterno' },
+      { name: 'El Lurker Eterno', alias: 'El que vio y pasó', sinner: 'El Lurker Eterno' },
+      { name: 'Testigo Silente', alias: 'Carga Eterna 99%', sinner: 'El Lurker Eterno' }
+    ];
     const contacts = [];
     for (let i = 0; i < 3; i++){
       const offset = 2.0 + i * 3.4, x = (i - 1) * 0.96;
       const ghostMat = L.hologram(0xb3e0f2, 0.64);
-      const ghost = mannequin(root, ghostMat, x, 0.84, 3.3);
+      const ghost = mannequin(root, ghostMat, x, 0.84, 3.3, false, {
+        build: i === 1 ? 'normal' : 'gaunt', hair: 'hood'
+      });
       ghost.name = 'Abandoned visitor waiting for a response ' + (i + 1);
       ghost.userData.role = 'abandoned-visitor';
       ghost.scale.set(0.95, 1.35, 0.95);
       ghost.rotation.y = Math.PI;
+      // 99% incomplete loading ring in chest + glowing phone screen fused to reaching hand
+      ring(ghost.userData.rig.chest, 0.13, 0.02, accent, 0, 0.04, 0.19, false, TAU * 0.92);
+      box(ghost.userData.rig.grips[1], 0.09, 0.17, 0.02, accent, 0, -0.06, 0.05, false);
+      tagCharacter(root, ghost, {
+        ...ghostTags[i],
+        offsetY: 0.55
+      });
       L.animate(ghost, motion, (t, rig) => {
         const age = L.phase(t + offset, period);
         const approach = smooth(age, 0.55, 3.70);
@@ -745,18 +1100,20 @@ APP.MODELS = (function(){
         const stride = Math.sin(age * 4.6 + i);
         ghost.position.set(x + Math.sin(age * 1.2 + i) * walking * 0.06,
           0.84 + Math.abs(stride) * walking * 0.055, 3.3 - approach * 4.88);
-        rig.lean = 0.05 + reach * 0.14 - failure * 0.13;
-        rig.nod = 0.03 + failure * 0.42;
+        rig.lean = 0.05 + reach * 0.16 - failure * 0.22;
+        rig.nod = 0.03 + failure * 0.48;
         rig.look = Math.sin(age * 0.64 + i) * (1 - reach) * 0.18;
+        rig.crouch = failure * 0.32;
         rig.breath = Math.sin(t * 1.1 + i);
-        rig.hands[0].set(-0.35, 1.07 + reach * 0.39, 0.11 + reach * 0.36);
-        rig.hands[1].set(0.27, 1.07 + reach * 0.77, 0.10 + reach * 0.60);
+        rig.shake = failure * 1.1;
+        rig.hands[0].set(-0.35, 1.07 + reach * 0.44, 0.11 + reach * 0.40);
+        rig.hands[1].set(0.27, 1.07 + reach * 0.82, 0.10 + reach * 0.64);
         rig.feet.forEach((foot, side) => {
           const step = stride * (side ? 1 : -1);
           foot.set((side ? 1 : -1) * 0.21, 0.09 + Math.max(0, step) * walking * 0.10, step * walking * 0.21);
         });
         ghostMat.uniforms.uTime.value = t;
-        ghostMat.uniforms.uOpacity.value = 0.70 * smooth(age, 0.0, 0.8) * (1 - smooth(age, 7.1, 8.5));
+        ghostMat.uniforms.uOpacity.value = 0.72 * smooth(age, 0.0, 0.8) * (1 - smooth(age, 7.1, 8.5));
         ghostMat.uniforms.uDissolve.value = smooth(age, 6.35, 8.35);
       });
       const contact = V(x - 0.256, 3.32, -2.19);
@@ -764,13 +1121,18 @@ APP.MODELS = (function(){
       contacts.push({ start: contact, end: contact, normal: V(0, 0, 1), delay: -offset });
       const fragments = V(x, 2.65, -1.52);
       L.stream(root, motion, { name: 'Unanswered visitor dissolving into data ' + (i + 1),
-        color: 0xc7ecff, start: fragments, end: fragments, count: 25,
+        color: 0xc7ecff, secondaryColor: 0xff2846, start: fragments, end: fragments, count: 38,
         burst: true, period, offset: offset - 6.15, duration: 2.2,
-        radius: 0.95, lift: 1.55, size: 0.40, seed: 812 + i });
+        radius: 1.05, lift: 1.65, size: 0.55, seed: 812 + i });
+      L.blood(root, motion, { name: 'Frozen blood tears at terminal ' + (i + 1),
+        start: fragments, end: V(x, 0.72, -1.52),
+        burst: true, period, offset: offset - 5.85, duration: 1.4,
+        count: 26, radius: 0.85, lift: 0.55, size: 1.05, seed: 830 + i });
     }
+    L.bloodPool(root, motion, { position: V(0, 0.72, -1.52), radius: 1.45, seed: 91.5, period, offset: -5.85 });
     L.waves(root, motion, { name: 'Unanswered terminal contacts', color: 0xc7eaff,
       emitters: contacts, period, offset: -5.85, travel: 1.5,
-      from: 0.08, to: 0.75, copies: 2, power: 0.9 });
+      from: 0.08, to: 0.85, copies: 3, power: 0.95 });
     const waitingColor = new THREE.Color(0xd4edff), failureColor = new THREE.Color(0xffa779);
     L.schedule(motion, t => {
       let failure = 0;
@@ -818,6 +1180,12 @@ APP.MODELS = (function(){
     ring(root, 2.45, 0.026, accent, 0, 15.61, 0, true);
 
     const e = eye(root, 2.78, accent, 0xff2b2b, 0, 20.2, 0);
+    tagCharacter(root, e.assembly, {
+      name: 'EL NÚCLEO',
+      alias: 'Conciencia Artificial Primigenia',
+      kind: 'custodian',
+      offsetY: 3.3
+    });
     const gyroscope = group(root, 'Core armillary', 0, 20.2, 0);
     const orbitA = group(gyroscope, 'Outer meridian');
     ring(orbitA, 4.85, 0.10, M.brass);
@@ -834,48 +1202,77 @@ APP.MODELS = (function(){
     sphere(orbitB, 0.17, accent, 3.7, 0, 0, 16);
     bake(orbitB); orbitB.userData.dynamic = true;
 
-    const attendant = mannequin(root, M.porcelain, -1.35, 15.65, 2.70);
+    const attendant = mannequin(root, M.porcelain, -1.35, 15.65, 2.70, false, {
+      build: 'gaunt', skin: 0xc4aba6, top: 0xc4aba6, bottom: 0x160508,
+      hair: 'bald', bareChest: true, eyeGlow: 0xff2b2b
+    });
     attendant.name = 'Core attendant channeling the collected signals';
     attendant.userData.role = 'core-attendant';
     attendant.rotation.y = 1.95;
     attendant.scale.setScalar(1.12);
-    box(attendant.userData.rig.head, 0.25, 0.035, 0.03, accent, 0, 0.035, 0.21, false);
+    // Crown of neural spikes + glowing red visor + cybernetic server-spine & sacrificial chest core
+    box(attendant.userData.rig.head, 0.25, 0.038, 0.035, accent, 0, 0.035, 0.20, false);
+    for (let k = 0; k < 7; k++){
+      const ang = -1.2 + (k / 6) * 2.4;
+      const spike = cylinder(attendant.userData.rig.head, 0.004, 0.018, 0.22, k % 2 ? accent : M.brass,
+        Math.sin(ang) * 0.19, 0.14 + Math.cos(ang) * 0.08, -0.02, 6);
+      spike.rotation.z = -ang * 0.85;
+    }
+    ring(attendant.userData.rig.chest, 0.12, 0.025, M.brass, 0, 0.05, 0.18);
+    sphere(attendant.userData.rig.chest, 0.085, M.bloodGlow, 0, 0.05, 0.18, 12);
+    for (let s = -1; s <= 1; s++){
+      box(attendant.userData.rig.chest, 0.08, 0.16, 0.18, M.metal, 0, s * 0.13, -0.18);
+      box(attendant.userData.rig.chest, 0.03, 0.12, 0.22, accent, 0, s * 0.13, -0.21, false);
+    }
+    tagCharacter(root, attendant, {
+      name: 'Ofrenda del Backdoor',
+      alias: 'Siervo del Núcleo',
+      kind: 'sinner',
+      offsetY: 0.58
+    });
     const conductors = attendant.userData.rig.grips.map(grip => {
       ring(grip, 0.13, 0.021, M.brass);
       return sphere(grip, 0.09, accent, 0, 0, 0, 12);
     });
     L.animate(attendant, motion, (t, rig) => {
       const charge = 0.5 - Math.cos(t / period * TAU) * 0.5;
-      rig.lean = 0.06 + charge * 0.09;
-      rig.nod = -0.34 - charge * 0.20;
-      rig.turn = Math.sin(t * 0.28) * 0.08;
-      rig.crouch = (1 - charge) * 0.035;
-      rig.breath = Math.sin(t * 1.45);
+      const absorption = L.pulse(t, period, 0.55 - 3.75);
+      rig.lean = 0.06 + charge * 0.14 - absorption * 0.18;
+      rig.nod = -0.34 - charge * 0.24 - absorption * 0.18;
+      rig.turn = Math.sin(t * 0.28) * 0.11;
+      rig.crouch = (1 - charge) * 0.045 + absorption * 0.12;
+      rig.breath = Math.sin(t * 1.85);
+      rig.shake = absorption * 1.15;
       rig.hands.forEach((hand, i) => {
         const side = i ? 1 : -1;
-        hand.set(side * (0.42 + charge * 0.13), 1.82 + charge * 0.45, 0.32 + charge * 0.04);
+        hand.set(side * (0.42 + charge * 0.16), 1.82 + charge * 0.52, 0.32 + charge * 0.06);
         rig.feet[i].set(side * 0.25, 0.09, side * 0.07);
-        conductors[i].scale.setScalar(0.85 + charge * 0.75);
+        conductors[i].scale.setScalar(0.85 + charge * 0.85);
       });
     });
     const intake = V(0.8, 20.6, 2.5), altar = V(0, 15.66, 0), underside = V(0, 17.5, 0);
+    L.bloodPool(root, motion, { position: V(0, 15.60, 0), radius: 2.35, seed: 99.1, period, offset: -3.75 });
+    L.bloodPool(root, motion, { position: V(-1.35, 15.60, 2.70), radius: 1.05, seed: 104.7, period, offset: -3.75 });
     L.vocal(attendant, motion, 0, { period, at: 3.75, level: 0.9 });
     const palms = [V(-1.0, 18, 2.8), V(-0.8, 18, 2.9)];
     const channels = palms.map((palm, i) => {
       const ray = L.beam(root, 0xff7044, 0.14);
       ray.name = 'Attendant energy channel ' + (i + 1);
       const data = L.stream(root, motion, { name: 'Signals ascending from the attendant ' + (i + 1),
-        color: 0xffb78e, start: palm, end: intake, count: 32, radius: 0.15,
-        turns: 5.2, period: 1.6, size: 0.46, seed: 967 + i });
+        color: 0xffb78e, secondaryColor: 0xff0d22, start: palm, end: intake, count: 44, radius: 0.19,
+        turns: 5.6, period: 1.5, size: 0.58, seed: 967 + i });
       return { ray, data };
     });
     const shaft = L.beam(root, 0xff3829, 0.44);
     shaft.name = 'Core intake column';
-    L.stream(root, motion, { name: 'Helical intake above the altar', color: 0xff5c41,
-      start: altar, end: underside, count: 56, radius: 0.91, turns: TAU * 1.8, period: 3.1, size: 0.41 });
+    L.stream(root, motion, { name: 'Helical intake above the altar', color: 0xff5c41, secondaryColor: 0xff0a1e,
+      start: altar, end: underside, count: 72, radius: 0.96, turns: TAU * 2.1, period: 2.8, size: 0.56 });
+    L.blood(root, motion, { name: 'Sacrificial altar blood eruption',
+      start: altar, end: underside, burst: true, period, offset: -3.75,
+      duration: 1.45, count: 48, radius: 1.55, lift: 1.85, size: 1.35, seed: 991 });
     L.waves(root, motion, { name: 'Core absorption pulse across the altar', color: 0xff5136,
       emitters: [{ start: altar, end: altar }], period, offset: -3.75,
-      copies: 2, travel: 2.35, from: 0.8, to: 4.08, power: 0.66 });
+      copies: 3, travel: 2.35, from: 0.8, to: 4.18, power: 0.82 });
     L.schedule(motion, t => {
       const charge = 0.5 - Math.cos(t / period * TAU) * 0.5;
       const absorption = L.pulse(t, period, 0.55 - 3.75);
@@ -901,6 +1298,7 @@ APP.MODELS = (function(){
     const c = APP.DATA.byId(id);
     const root = group(null, c.title);
     const motion = [];
+    root.userData.characters = [];
     const radius = id === 0 ? 8.2 : id === 2 ? 7.65 : 7.2;
     foundation(root, radius, 700 + id * 89, M.accents[id]);
     const builders = { 0: core, 1: surveillance, 2: auction, 3: identities, 4: chorus, 5: abandoned };

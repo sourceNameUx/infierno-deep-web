@@ -14,7 +14,7 @@ APP.SCENE = (function(){
   };
   const HAZE = 0x272236;
   const DIRECTION = [0.18, 0.70, 1];
-  const islands = new Map(), labels = new Map();
+  const islands = new Map(), labels = new Map(), charLabels = [];
   const motions = [], packets = [], pickables = [];
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
   let renderer, scene, camera, controls, composer = null;
@@ -41,15 +41,15 @@ APP.SCENE = (function(){
     const canvas = document.getElementById('scene3d');
     progress('Preparando la cámara y la luz…', 0);
     await yieldTask();
-    renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false, powerPreference: 'high-performance' });
+    renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
     renderer.outputEncoding = THREE.sRGBEncoding;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.25;
     renderer.info.autoReset = false;
-    const smallDevice = window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 700;
-    pixelRatio = Math.min(window.devicePixelRatio || 1, smallDevice ? 1.25 : 1.65);
+    const smallDevice = false;
+    pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
     renderer.setPixelRatio(pixelRatio);
-    renderer.shadowMap.enabled = !smallDevice;
+    renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
     scene = new THREE.Scene();
@@ -102,6 +102,7 @@ APP.SCENE = (function(){
         if (!ready || viewFrustum.intersectsSphere(bounds)) island.userData.motion.forEach(update => update(time));
       });
       createLabel(id);
+      createCharacterLabels(island, id);
       createPickVolume(island, id);
       const c = APP.DATA.byId(id);
       const light = new THREE.PointLight(c.col, id === 0 ? 2.0 : 0.8, id === 0 ? 38 : 19, 2);
@@ -115,7 +116,7 @@ APP.SCENE = (function(){
     APP.ATMOSPHERE.create(scene, camera, motions, smallDevice);
     APP.CREATURES.create(scene, camera, motions, smallDevice);
     createFibers();
-    createParticles(smallDevice ? 580 : 1050);
+    createParticles(smallDevice ? 920 : 1750);
     createMist();
     setupBloom(smallDevice);
     worldBounds = new THREE.Box3(V(-36, -8, -22), V(36, 34.8, 40));
@@ -380,36 +381,55 @@ APP.SCENE = (function(){
 
   function createParticles(count){
     const random = APP.TEX.rng(94);
-    const positions = new Float32Array(count * 3), seeds = new Float32Array(count);
+    const positions = new Float32Array(count * 3), seeds = new Float32Array(count * 2);
     for (let i = 0; i < count; i++){
-      positions[i * 3] = (random() - 0.5) * 148;
-      positions[i * 3 + 1] = random() * 50;
-      positions[i * 3 + 2] = (random() - 0.5) * 142;
-      seeds[i] = random();
+      positions[i * 3] = (random() - 0.5) * 156;
+      positions[i * 3 + 1] = random() * 54;
+      positions[i * 3 + 2] = (random() - 0.5) * 148;
+      seeds[i * 2] = random();
+      seeds[i * 2 + 1] = random();
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    geo.setAttribute('aSeed', new THREE.BufferAttribute(seeds, 1));
+    geo.setAttribute('aSeed', new THREE.BufferAttribute(seeds, 2));
     const mat = new THREE.ShaderMaterial({
       uniforms: { uTime: { value: 0 }, uPixelRatio: { value: pixelRatio } },
-      vertexShader: `attribute float aSeed;uniform float uTime;uniform float uPixelRatio;
-        varying float vLife;varying float vSeed;
-        void main(){vec3 p=position;p.y=mod(p.y+uTime*(0.37+aSeed*0.6),50.0)-12.0;
-          p.x+=sin(uTime*0.18+aSeed*72.0)*1.7;p.z+=cos(uTime*0.11+aSeed*35.0)*1.4;
-          vec4 mv=modelViewMatrix*vec4(p,1.0);vLife=smoothstep(-12.0,-6.0,p.y)*(1.0-smoothstep(12.0,38.0,p.y));
-          vLife*=1.0-smoothstep(90.0,195.0,-mv.z);vSeed=aSeed;
-          gl_PointSize=clamp((1.0+aSeed*1.8)*130.0/max(1.0,-mv.z),1.0,6.0)*uPixelRatio;
-          gl_Position=projectionMatrix*mv;}`,
-      fragmentShader: `varying float vLife;varying float vSeed;
-        void main(){vec2 p=gl_PointCoord-0.5;float r=length(p)*2.0;
-          float a=pow(max(0.0,1.0-r),2.3)*vLife*0.62;
-          vec3 col=mix(vec3(1.0,0.22,0.035),vec3(1.0,0.69,0.32),vSeed);
-          gl_FragColor=vec4(col,a);}`,
+      vertexShader: `attribute vec2 aSeed;uniform float uTime;uniform float uPixelRatio;
+        varying float vLife;varying vec2 vSeed;varying float vFlicker;
+        void main(){
+          vec3 p=position;
+          float speed=0.32+aSeed.x*0.78;
+          p.y=mod(p.y+uTime*speed,54.0)-13.0;
+          float swirl=uTime*(0.24+aSeed.y*0.22)+aSeed.x*62.8;
+          p.x+=sin(swirl)*2.35+cos(p.y*0.18+aSeed.y*19.0)*0.85;
+          p.z+=cos(swirl*0.87)*2.15+sin(p.y*0.16+aSeed.x*27.0)*0.85;
+          vec4 mv=modelViewMatrix*vec4(p,1.0);
+          vLife=smoothstep(-13.0,-5.5,p.y)*(1.0-smoothstep(16.0,41.0,p.y));
+          vLife*=1.0-smoothstep(95.0,210.0,-mv.z);
+          vSeed=aSeed;
+          vFlicker=0.65+0.35*sin(uTime*6.5+aSeed.x*91.0+aSeed.y*43.0);
+          float baseSize=(1.4+aSeed.x*2.8)*(aSeed.y>0.68?1.35:1.0);
+          gl_PointSize=clamp(baseSize*165.0/max(6.0,-mv.z),1.6,13.5)*uPixelRatio;
+          gl_Position=projectionMatrix*mv;
+        }`,
+      fragmentShader: `varying float vLife;varying vec2 vSeed;varying float vFlicker;
+        void main(){
+          vec2 p=gl_PointCoord-0.5;
+          float r=length(p)*2.0;
+          if(r>1.0) discard;
+          float halo=exp(-r*r*3.2);
+          float core=exp(-r*r*18.0);
+          float a=(halo*0.68+core*0.52)*vLife*vFlicker*0.82;
+          vec3 emberCol=mix(vec3(1.0,0.16,0.025),vec3(1.0,0.72,0.28),vSeed.x);
+          vec3 bloodAsh=mix(vec3(0.85,0.02,0.06),vec3(1.0,0.18,0.32),vSeed.x);
+          vec3 col=mix(emberCol,bloodAsh,step(0.64,vSeed.y))+vec3(1.0,0.9,0.85)*core*0.45;
+          gl_FragColor=vec4(col,a);
+        }`,
       transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false
     });
     particles = new THREE.Points(geo, mat);
     particles.frustumCulled = false;
-    particles.name = 'Buoyant embers';
+    particles.name = 'Buoyant embers and blood ash';
     scene.add(particles);
   }
 
@@ -562,10 +582,52 @@ APP.SCENE = (function(){
     labels.set(id, { element: label, width: 130, height: 30 });
   }
 
+  function createCharacterLabels(island, id){
+    const c = APP.DATA.byId(id);
+    const list = island.userData.characters || [];
+    const container = document.getElementById('labels3d');
+    list.forEach(ch => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'char-label' + (ch.kind === 'custodian' ? ' custodian' : '');
+      btn.dataset.circuit = id;
+      if (ch.sinner) btn.dataset.sinner = ch.sinner;
+      btn.style.setProperty('--lc', c.color);
+      btn.innerHTML = `<span class="char-name">${ch.name}</span>` +
+        (ch.alias ? `<small class="char-alias">${ch.alias}</small>` : '');
+      btn.setAttribute('aria-label', ch.name + (ch.alias ? ' — ' + ch.alias : ''));
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        if (ch.sinner && APP.UI.openSinner){
+          APP.UI.select(id, false);
+          APP.UI.openSinner(ch.sinner);
+        } else {
+          APP.UI.select(id, true);
+        }
+      });
+      container.appendChild(btn);
+      charLabels.push({
+        element: btn,
+        circuit: id,
+        island,
+        anchor: ch.anchor,
+        node: ch.node,
+        offsetY: ch.offsetY,
+        kind: ch.kind,
+        width: 124,
+        height: 32
+      });
+    });
+  }
+
   function measureLabels(){
     labels.forEach(label => {
       label.width = label.element.offsetWidth || 130;
       label.height = label.element.offsetHeight || 30;
+    });
+    charLabels.forEach(item => {
+      item.width = item.element.offsetWidth || 124;
+      item.height = item.element.offsetHeight || 32;
     });
   }
 
@@ -594,6 +656,39 @@ APP.SCENE = (function(){
       if (chosen){
         occupied.push(chosen);
         item.element.style.transform = `translate3d(${Math.round(chosen.x)}px,${Math.round(chosen.y)}px,0)`;
+      }
+    }
+
+    const charOccupied = [];
+    const charOffsets = [0, -26, 24, -50, 46];
+    for (let i = 0; i < charLabels.length; i++){
+      const item = charLabels[i];
+      item.anchor.getWorldPosition(point);
+      point.y += item.offsetY;
+      const dist = camera.position.distanceTo(point);
+      point.project(camera);
+      if (point.z > -1 && point.z < 1 && Math.abs(point.x) < 1.12 && Math.abs(point.y) < 1.12 && dist < 245){
+        const scale = clamp(42 / Math.max(24, dist), 0.62, 1.06);
+        const w = item.width * scale, h = item.height * scale;
+        const cx = clamp((point.x * 0.5 + 0.5) * width, viewport.left + w * 0.5, viewport.right - w * 0.5);
+        const baseCy = (0.5 - point.y * 0.5) * height;
+        let finalY = baseCy;
+        for (const off of charOffsets){
+          const testY = baseCy + off * scale;
+          const rect = { x: cx - w * 0.5, y: testY - h, w, h };
+          if (!charOccupied.some(r => rect.x < r.x + r.w + 4 && rect.x + rect.w + 4 > r.x && rect.y < r.y + r.h + 3 && rect.y + rect.h + 3 > r.y)){
+            finalY = testY;
+            charOccupied.push(rect);
+            break;
+          }
+        }
+        const focused = activeView === null || activeView === item.circuit;
+        const opacity = focused ? clamp(1.28 - dist / 210, 0.72, 1) : 0.42;
+        item.element.style.visibility = 'visible';
+        item.element.style.opacity = opacity.toFixed(2);
+        item.element.style.transform = `translate3d(${cx.toFixed(1)}px,${finalY.toFixed(1)}px,0) translate(-50%,-100%) scale(${scale.toFixed(3)})`;
+      } else {
+        item.element.style.visibility = 'hidden';
       }
     }
   }
@@ -690,25 +785,11 @@ APP.SCENE = (function(){
       if (composer){ disableBloom(); renderer.render(scene, camera); }
       else { running = false; showRendererNotice('No se pudo dibujar la escena. Los expedientes siguen disponibles; prueba a recargar la página.'); throw error; }
     }
-    if (now - lastLabelFrame > 33){ updateLabels(); lastLabelFrame = now; }
+    updateLabels();
+    lastLabelFrame = now;
     if (now - lastReadout > 400){
       APP.UI.setCoords('SECTOR 0x0' + APP.UI.current + ' · ' + (activeView === null ? 'VISTA GENERAL' : 'CONEXIÓN ACTIVA'));
       lastReadout = now;
-    }
-    // A two-stage, bounded degradation; never repeatedly rebuild the scene.
-    if (now > 5000 && wallMs < 180 && qualityStage < 2){
-      frameCost += wallMs; frameSamples++;
-      if (frameSamples >= 120){
-        if (frameCost / frameSamples > 38){
-          if (qualityStage === 0 && pixelRatio > 1){
-            pixelRatio = 1; renderer.setPixelRatio(1);
-            particles.material.uniforms.uPixelRatio.value = 1;
-            resize();
-          } else { disableBloom(); renderer.shadowMap.enabled = false; }
-          qualityStage++;
-        }
-        frameSamples = 0; frameCost = 0;
-      }
     }
     frameId = requestAnimationFrame(frame);
   }
